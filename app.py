@@ -176,13 +176,12 @@ if st.session_state.get("_cubia_flash_success"):
 # LOJA PÚBLICA
 # ==========================================
 
+
 def public_store():
     st.image("assets/logo_cubia.png", width=300)
     st.title("🦁 CUBIA")
     st.subheader("Ideias que ganham forma.")
-    st.write(
-        "Laboratório 3D e soluções inteligentes."
-    )
+    st.write("Laboratório 3D e soluções inteligentes.")
 
     page = st.radio(
         "Navegação",
@@ -190,7 +189,11 @@ def public_store():
         horizontal=True
     )
 
+    # ======================================
+    # CATÁLOGO DE PRODUTOS
+    # ======================================
     if page == "Produtos":
+
         products = supabase.table(
             "products"
         ).select("*").eq(
@@ -201,38 +204,129 @@ def public_store():
             st.info("Nosso catálogo está sendo preparado.")
             return
 
-        cols = st.columns(3)
+        selected_id = st.session_state.get(
+            "selected_product_id"
+        )
 
-        for i, p in enumerate(products):
-            with cols[i % 3]:
-                if p.get("image_url"):
+        # ----------------------------------
+        # DETALHES DO PRODUTO
+        # ----------------------------------
+        if selected_id is not None:
+
+            product = next(
+                (
+                    p for p in products
+                    if str(p["id"]) == str(selected_id)
+                ),
+                None
+            )
+
+            if product is None:
+                st.session_state.selected_product_id = None
+                st.rerun()
+
+            if st.button("← Voltar aos produtos"):
+                st.session_state.selected_product_id = None
+                st.rerun()
+
+            st.divider()
+
+            col_img, col_info = st.columns([1.2, 1])
+
+            with col_img:
+                if product.get("image_url"):
                     st.image(
-                        p["image_url"],
+                        product["image_url"],
                         use_container_width=True
                     )
+                else:
+                    st.info("Foto não cadastrada.")
 
-                st.subheader(p["name"])
-                st.caption(p.get("category") or "")
-                st.write(p.get("description") or "")
-                st.markdown(f"### {money(p['price'])}")
+            with col_info:
+                st.title(product["name"])
+
+                if product.get("category"):
+                    st.caption(product["category"])
+
+                st.markdown(
+                    f"## {money(product['price'])}"
+                )
+
+                if product.get("description"):
+                    st.write(product["description"])
+
+                st.write("")
 
                 if st.button(
-                    "Adicionar ao carrinho",
-                    key=f"add_{p['id']}",
-                    use_container_width=True
+                    "🛒 Adicionar ao carrinho",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"detail_add_{product['id']}"
                 ):
                     cart = st.session_state.cart
-                    if p["id"] in cart:
-                        cart[p["id"]]["quantity"] += 1
+
+                    if product["id"] in cart:
+                        cart[product["id"]]["quantity"] += 1
                     else:
-                        cart[p["id"]] = {
-                            "name": p["name"],
-                            "price": float(p["price"]),
+                        cart[product["id"]] = {
+                            "name": product["name"],
+                            "price": float(product["price"]),
                             "quantity": 1
                         }
-                    st.success("Produto adicionado!")
 
+                    st.success("Produto adicionado ao carrinho!")
+
+                if st.button(
+                    "Continuar comprando",
+                    use_container_width=True
+                ):
+                    st.session_state.selected_product_id = None
+                    st.rerun()
+
+        # ----------------------------------
+        # GRADE DE PRODUTOS
+        # ----------------------------------
+        else:
+            st.markdown("### Nosso catálogo")
+
+            cols = st.columns(2)
+
+            for i, p in enumerate(products):
+                with cols[i % 2]:
+
+                    with st.container(border=True):
+
+                        if p.get("image_url"):
+                            st.image(
+                                p["image_url"],
+                                use_container_width=True
+                            )
+                        else:
+                            st.caption("Foto não cadastrada")
+
+                        st.markdown(f"**{p['name']}**")
+
+                        st.caption(
+                            p.get("category") or ""
+                        )
+
+                        st.markdown(
+                            f"### {money(p['price'])}"
+                        )
+
+                        if st.button(
+                            "Ver produto",
+                            key=f"view_{p['id']}",
+                            use_container_width=True
+                        ):
+                            st.session_state.selected_product_id = p["id"]
+                            st.rerun()
+
+    # ======================================
+    # CARRINHO
+    # ======================================
     elif page == "Meu carrinho":
+
         cart = st.session_state.cart
 
         if not cart:
@@ -296,8 +390,12 @@ def public_store():
                 use_container_width=True
             )
 
+    # ======================================
+    # SOBRE A CUBIA
+    # ======================================
     else:
         st.title("Sobre a CUBIA")
+
         st.write(
             """
             A CUBIA é um laboratório 3D e de soluções
