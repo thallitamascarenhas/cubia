@@ -216,7 +216,7 @@ def public_store():
     
     page = st.radio(
         "Navegação",
-        ["Produtos", "Meu carrinho", "Sobre a Cubia"],
+        ["Produtos", "🛒 Meu carrinho 🛒 ", "Sobre a Cubia"],
         horizontal=True
     )
 
