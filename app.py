@@ -56,6 +56,17 @@ def format_date(value):
         return str(value)
 
 
+def month_label(value):
+    """Retorna a abreviação do mês em português a partir de uma data ISO."""
+    if value is None or str(value).strip() in ("", "None", "NaT"):
+        return "Não informado"
+    try:
+        month = date.fromisoformat(str(value)[:10]).month
+        return ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][month - 1]
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def whatsapp_url(phone, message=""):
     digits = re.sub(r"\D", "", str(phone or ""))
     if not digits:
@@ -94,10 +105,11 @@ def payment_label(sale):
     received = Decimal(str(received))
     total = Decimal(str(total or 0))
     if received == 0:
-        return "Pendente"
+        return "A receber"
     if received < total:
-        return "Parcial"
-    return "Pago"
+        balance = total - received
+        return f"Pagamento parcial: Falta pagar {money(balance)}"
+    return "Quitado"
 
 
 def upload_product_image(uploaded_file):
@@ -804,15 +816,21 @@ def admin_panel():
         expenses = get_data("expenses")
 
         if expenses:
-            expenses_df = pd.DataFrame(expenses)
-            for date_col in ("expense_date", "competence_month"):
-                if date_col in expenses_df.columns:
-                    expenses_df[date_col] = expenses_df[date_col].apply(format_date)
+            expenses_view = []
+            for expense in sorted(expenses, key=lambda x: x.get("competence_month") or ""):
+                expenses_view.append({
+                    "Mês": month_label(expense.get("competence_month") or expense.get("expense_date")),
+                    "Quantidade": expense.get("quantity"),
+                    "ITEM": expense.get("item") or "",
+                    "GASTO (R$)": money(expense.get("amount")),
+                    "Obs": expense.get("notes") or "N/A"
+                })
             st.dataframe(
-                expenses_df,
+                pd.DataFrame(expenses_view),
                 use_container_width=True,
                 hide_index=True
             )
+            st.caption(f"Total de despesas cadastradas: {money(sum(float(e.get('amount') or 0) for e in expenses))}")
 
     # ======================================
     # VENDAS
@@ -899,6 +917,31 @@ def admin_panel():
         all_payments = get_data("sale_payments")
         sales = sorted(sales, key=lambda x: x.get("sale_date") or "", reverse=True)
 
+        if sales:
+            st.subheader("Resumo de vendas")
+            sales_view = []
+            for sale_row in sorted(sales, key=lambda x: (x.get("sale_date") or "", x.get("created_at") or "")):
+                linked = next((c for c in clients if c.get("id") == sale_row.get("client_id")), None)
+                delivered = sale_row.get("delivery_date")
+                sales_view.append({
+                    "Mês pedido": month_label(sale_row.get("sale_date")).upper(),
+                    "Qtd": sale_row.get("order_quantity") if sale_row.get("order_quantity") is not None else "Não informada",
+                    "Item": sale_row.get("order_description") or "Pedido antigo",
+                    "Cliente": linked.get("name") if linked else (sale_row.get("client_reference") or "Sem pessoa especificada"),
+                    "Custo total do pedido": optional_money(sale_row.get("total_cost")),
+                    "Valor a receber": money(sale_row.get("total_amount")),
+                    "Status Pagamento": payment_label(sale_row),
+                    "PRAZO para entrega": month_label(sale_row.get("desired_date")).upper(),
+                    "Status Fabricação": (
+                        "A fabricar" if sale_row.get("production_status") == "Pendente de fabricação"
+                        else sale_row.get("production_status") or "Não informado"
+                    ),
+                    "Status entrega": "Entregue" if sale_row.get("delivery_status") == "Entregue" else "A entregar",
+                    "ENTREGA realizada em": sale_row.get("delivery_note") or (month_label(delivered).upper() if delivered else "Não realizada")
+                })
+            st.dataframe(pd.DataFrame(sales_view), use_container_width=True, hide_index=True)
+            st.divider()
+
         if not sales:
             st.info("Nenhum pedido cadastrado.")
 
@@ -944,6 +987,7 @@ def admin_panel():
                     edit_description = st.text_area("Descrição", value=sale.get("order_description") or description, key=f"edesc_{sale_id}")
                     edit_qty = st.number_input("Quantidade (0 = não informada)", min_value=0, value=int(sale.get("order_quantity") or 0), step=1, key=f"eqty_{sale_id}")
                     edit_client_label = st.selectbox("Cliente", list(client_labels.keys()), index=list(client_labels.keys()).index(current_client_label) if current_client_label in client_labels else 0, key=f"eclient_{sale_id}")
+                    edit_client_reference = st.text_input("Referência do comprador (se não houver cliente cadastrado)", value=sale.get("client_reference") or "", key=f"eclientref_{sale_id}")
                     edit_total = st.number_input("Valor TOTAL da venda (R$)", min_value=0.01, value=float(sale.get("total_amount") or 0.01), step=1.0, format="%.2f", key=f"etotal_{sale_id}")
                     edit_cost_known = st.checkbox("Custo total informado", value=sale.get("total_cost") is not None, key=f"ecostknown_{sale_id}")
                     edit_cost = st.number_input("Custo TOTAL da produção (R$)", min_value=0.0, value=float(sale.get("total_cost") or 0), step=1.0, format="%.2f", disabled=not edit_cost_known, key=f"ecost_{sale_id}")
@@ -960,6 +1004,10 @@ def admin_panel():
                     if old_delivery and old_delivery not in delivery_options:
                         delivery_options.append(old_delivery)
                     edit_delivery = st.selectbox("Situação da entrega", delivery_options, index=delivery_options.index(old_delivery) if old_delivery in delivery_options else 0, key=f"edelivery_{sale_id}")
+                    delivered_date_known = st.checkbox("Informar mês/data em que foi entregue", value=sale.get("delivery_date") is not None, key=f"edeliveredknown_{sale_id}")
+                    existing_delivered_date = date.fromisoformat(str(sale.get("delivery_date") or date.today())[:10])
+                    edit_delivery_date = st.date_input("Entrega realizada em", value=existing_delivered_date, format="DD/MM/YYYY", disabled=not delivered_date_known, key=f"edeliverydate_{sale_id}")
+                    edit_delivery_note = st.text_input("Observação da entrega", value=sale.get("delivery_note") or "", key=f"edeliverynote_{sale_id}")
                     edit_notes = st.text_area("Observações", value=sale.get("notes") or "", key=f"enotes_{sale_id}")
                     update_order = st.form_submit_button("Salvar alterações do pedido")
 
@@ -973,11 +1021,14 @@ def admin_panel():
                                 "order_description": edit_description.strip(),
                                 "order_quantity": int(edit_qty) if edit_qty > 0 else None,
                                 "client_id": client_labels[edit_client_label],
+                                "client_reference": edit_client_reference.strip() or None,
                                 "total_amount": float(edit_total),
                                 "total_cost": float(edit_cost) if edit_cost_known else None,
                                 "desired_date": str(edit_deadline) if edit_deadline_known else None,
                                 "production_status": edit_production,
                                 "delivery_status": edit_delivery,
+                                "delivery_date": str(edit_delivery_date) if delivered_date_known and edit_delivery == "Entregue" else None,
+                                "delivery_note": edit_delivery_note.strip() or None,
                                 "notes": edit_notes.strip() or None
                             }).eq("id", sale_id).execute()
                             flash_success("Pedido atualizado.")
