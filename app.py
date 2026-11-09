@@ -5,6 +5,7 @@ from supabase import create_client
 from urllib.parse import quote
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 # ==========================================
 # CONFIGURAÇÃO
@@ -52,6 +53,34 @@ def get_data(table, filters=None):
 
 def save_data(table, data):
     return supabase.table(table).insert(data).execute()
+
+
+def upload_product_image(uploaded_file):
+    """Envia a imagem para o bucket público product-images e retorna sua URL."""
+    if uploaded_file is None:
+        return None
+
+    allowed_types = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp"
+    }
+    if uploaded_file.type not in allowed_types:
+        raise ValueError("Formato inválido. Use JPG, PNG ou WEBP.")
+
+    extension = allowed_types[uploaded_file.type]
+    file_path = f"products/{uuid4().hex}.{extension}"
+
+    supabase.storage.from_("product-images").upload(
+        file_path,
+        uploaded_file.getvalue(),
+        file_options={
+            "content-type": uploaded_file.type,
+            "cache-control": "3600"
+        }
+    )
+
+    return supabase.storage.from_("product-images").get_public_url(file_path)
 
 
 def admin_login():
@@ -447,51 +476,140 @@ def admin_panel():
             name = st.text_input("Nome do produto")
             category = st.text_input("Categoria")
             description = st.text_area("Descrição")
-            image_url = st.text_input("Link da imagem")
+            uploaded_image = st.file_uploader(
+                "Foto do produto",
+                type=["jpg", "jpeg", "png", "webp"],
+                help="Escolha uma imagem da galeria do celular ou do computador."
+            )
+            if uploaded_image is not None:
+                st.image(uploaded_image, caption="Prévia da imagem", width=220)
+
             price = st.number_input(
-                "Preço de venda (R$)", min_value=0.0,
-                step=1.0
+                "Preço de venda (R$)", min_value=0.0, step=1.0
             )
             cost = st.number_input(
-                "Preço de custo unitário (R$)",
-                min_value=0.0, step=0.5
+                "Preço de custo unitário (R$)", min_value=0.0, step=0.5
             )
             stock = st.number_input(
                 "Estoque inicial", min_value=0, step=1
             )
             active = st.checkbox("Produto ativo", value=True)
-
             submitted = st.form_submit_button("Salvar produto")
 
         if submitted:
             if not name.strip():
                 st.error("Informe o nome do produto.")
             else:
-                save_data("products", {
-                    "name": name,
-                    "category": category,
-                    "description": description,
-                    "image_url": image_url,
-                    "price": price,
-                    "cost_price": cost,
-                    "stock_qty": stock,
-                    "active": active
-                })
-                st.success("Produto cadastrado!")
-                st.rerun()
+                try:
+                    image_url = upload_product_image(uploaded_image)
+                    save_data("products", {
+                        "name": name.strip(),
+                        "category": category,
+                        "description": description,
+                        "image_url": image_url,
+                        "price": price,
+                        "cost_price": cost,
+                        "stock_qty": stock,
+                        "active": active
+                    })
+                    st.success("Produto cadastrado!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Não foi possível cadastrar o produto: {e}")
 
         st.divider()
         st.subheader("Produtos cadastrados")
 
         for p in get_data("products"):
             with st.expander(p["name"]):
+                if p.get("image_url"):
+                    st.image(p["image_url"], width=180)
+
                 st.write("Categoria:", p.get("category"))
                 st.write("Venda:", money(p["price"]))
                 st.write("Custo:", money(p["cost_price"]))
                 st.write("Estoque:", p["stock_qty"])
                 st.write("Ativo:", p["active"])
 
-    # ======================================
+                st.markdown("**Editar produto**")
+                with st.form(f"edit_product_{p['id']}"):
+                    edit_name = st.text_input(
+                        "Nome do produto", value=p.get("name") or "",
+                        key=f"name_{p['id']}"
+                    )
+                    edit_category = st.text_input(
+                        "Categoria", value=p.get("category") or "",
+                        key=f"category_{p['id']}"
+                    )
+                    edit_description = st.text_area(
+                        "Descrição", value=p.get("description") or "",
+                        key=f"description_{p['id']}"
+                    )
+                    replacement_image = st.file_uploader(
+                        "Trocar foto (opcional)",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        key=f"image_{p['id']}",
+                        help="Sem uma nova foto, a imagem atual será mantida."
+                    )
+                    if replacement_image is not None:
+                        st.image(
+                            replacement_image,
+                            caption="Prévia da nova imagem",
+                            width=180
+                        )
+
+                    edit_price = st.number_input(
+                        "Preço de venda (R$)", min_value=0.0,
+                        value=float(p.get("price") or 0), step=1.0,
+                        key=f"price_{p['id']}"
+                    )
+                    edit_cost = st.number_input(
+                        "Preço de custo unitário (R$)", min_value=0.0,
+                        value=float(p.get("cost_price") or 0), step=0.5,
+                        key=f"cost_{p['id']}"
+                    )
+                    edit_stock = st.number_input(
+                        "Estoque", min_value=0,
+                        value=int(p.get("stock_qty") or 0), step=1,
+                        key=f"stock_{p['id']}"
+                    )
+                    edit_active = st.checkbox(
+                        "Produto ativo", value=bool(p.get("active")),
+                        key=f"active_{p['id']}"
+                    )
+                    update_submitted = st.form_submit_button(
+                        "Salvar alterações"
+                    )
+
+                if update_submitted:
+                    if not edit_name.strip():
+                        st.error("Informe o nome do produto.")
+                    else:
+                        try:
+                            updated_image_url = p.get("image_url")
+                            if replacement_image is not None:
+                                updated_image_url = upload_product_image(
+                                    replacement_image
+                                )
+
+                            supabase.table("products").update({
+                                "name": edit_name.strip(),
+                                "category": edit_category,
+                                "description": edit_description,
+                                "image_url": updated_image_url,
+                                "price": edit_price,
+                                "cost_price": edit_cost,
+                                "stock_qty": edit_stock,
+                                "active": edit_active
+                            }).eq("id", p["id"]).execute()
+
+                            st.success("Produto atualizado!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(
+                                f"Não foi possível atualizar o produto: {e}"
+                            )
+
     # CLIENTES
     # ======================================
 
