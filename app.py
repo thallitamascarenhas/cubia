@@ -183,6 +183,22 @@ def public_store():
     st.subheader("Ideias que ganham forma.")
     st.write("Laboratório 3D e soluções inteligentes.")
 
+    st.markdown("""
+        <style>
+        div[class*="st-key-catalog_grid"] [data-testid="stHorizontalBlock"] {
+            flex-wrap: nowrap !important;
+            gap: 10px !important;
+        }
+
+        div[class*="st-key-catalog_grid"] [data-testid="column"] {
+            min-width: 0 !important;
+            width: 50% !important;
+            flex: 0 0 50% !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    
     page = st.radio(
         "Navegação",
         ["Produtos", "Meu carrinho", "Sobre a Cubia"],
@@ -286,41 +302,67 @@ def public_store():
         # ----------------------------------
         # GRADE DE PRODUTOS
         # ----------------------------------
+        
+        # ----------------------------------
+        # GRADE DE PRODUTOS
+        # ----------------------------------
         else:
             st.markdown("### Nosso catálogo")
 
-            cols = st.columns(2)
+            with st.container(key="catalog_grid"):
+                cols = st.columns(2)
 
-            for i, p in enumerate(products):
-                with cols[i % 2]:
+                for i, p in enumerate(products):
+                    with cols[i % 2]:
 
-                    with st.container(border=True):
+                        with st.container(border=True):
 
-                        if p.get("image_url"):
-                            st.image(
-                                p["image_url"],
-                                use_container_width=True
+                            if p.get("image_url"):
+                                st.image(
+                                    p["image_url"],
+                                    use_container_width=True
+                                )
+                            else:
+                                st.caption("Foto não cadastrada")
+
+                            st.markdown(f"**{p['name']}**")
+
+                            st.caption(
+                                p.get("category") or ""
                             )
-                        else:
-                            st.caption("Foto não cadastrada")
 
-                        st.markdown(f"**{p['name']}**")
+                            st.markdown(
+                                f"### {money(p['price'])}"
+                            )
 
-                        st.caption(
-                            p.get("category") or ""
-                        )
+                            if st.button(
+                                "Ver produto",
+                                key=f"view_{p['id']}",
+                                use_container_width=True
+                            ):
+                                st.session_state.selected_product_id = p["id"]
+                                st.rerun()
 
-                        st.markdown(
-                            f"### {money(p['price'])}"
-                        )
+                            if st.button(
+                                "🛒 Adicionar",
+                                key=f"add_grid_{p['id']}",
+                                type="primary",
+                                use_container_width=True
+                            ):
+                                cart = st.session_state.cart
 
-                        if st.button(
-                            "Ver produto",
-                            key=f"view_{p['id']}",
-                            use_container_width=True
-                        ):
-                            st.session_state.selected_product_id = p["id"]
-                            st.rerun()
+                                if p["id"] in cart:
+                                    cart[p["id"]]["quantity"] += 1
+                                else:
+                                    cart[p["id"]] = {
+                                        "name": p["name"],
+                                        "price": float(p["price"]),
+                                        "quantity": 1
+                                    }
+
+                                st.toast(
+                                    f"{p['name']} adicionado ao carrinho!"
+                                )
 
     # ======================================
     # CARRINHO
