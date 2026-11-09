@@ -1,136 +1,128 @@
-            available_lots = [
-                l for l in lots if float(l["remaining_grams"]) > 0
-            ]
-
-            if not available_lots:
-                st.info("Não há filamentos disponíveis.")
-            else:
-                lot_options = {
-                    f"{l['material']} | {l['brand']} | {l['color']} | "
-                    f"{float(l['remaining_grams']):.1f} g": l
-                    for l in available_lots
-                }
-
-                selected_lot_label = st.selectbox(
-                    "Filamento utilizado",
-                    list(lot_options.keys())
-                )
-
-                selected_lot = lot_options[selected_lot_label]
-
-                product_options = {
-                    p["name"]: p["id"] for p in products
-                }
-
-                product_name = st.selectbox(
-                    "Produto fabricado",
-                    ["Não especificado"] + list(product_options.keys())
-                )
-
-                used_grams = st.number_input(
-                    "Quantidade consumida (g)",
-                    min_value=0.01, step=1.0
-                )
-
-                production_date = st.date_input(
-                    "Data da produção", value=date.today()
-                )
-
-                production_notes = st.text_area(
-                    "Observações da produção"
-                )
-
-                if st.button("Registrar consumo", type="primary"):
-                    remaining = (
-                        float(selected_lot["remaining_grams"])
-                        - used_grams
-                    )
-
-                    if remaining < 0:
-                        st.error("Quantidade maior que o saldo disponível.")
-                    else:
-                        unit_cost = (
-                            float(selected_lot["purchase_cost"])
-                            / float(selected_lot["initial_grams"])
-                        )
-
-                        total_cost = used_grams * unit_cost
-
-                        product_id = (
-                            product_options.get(product_name)
-                            if product_name != "Não especificado"
-                            else None
-                        )
-
-                        supabase.table("filament_lots").update({
-                            "remaining_grams": remaining
-                        }).eq("id", selected_lot["id"]).execute()
-
-                        save_data("filament_movements", {
-                            "lot_id": selected_lot["id"],
-                            "movement_type": "Consumo",
-                            "quantity_grams": used_grams,
-                            "unit_cost_snapshot": unit_cost,
-                            "total_cost": total_cost,
-                            "product_id": product_id,
-                            "production_date": str(production_date),
-                            "notes": production_notes
-                        })
-
-                        st.success(
-                            f"Consumo registrado! Custo: {money(total_cost)}"
-                        )
-                        st.rerun()
-
-        with tab3:
-            lots = get_data("filament_lots")
-
-            if lots:
-                df = pd.DataFrame(lots)
-                df = df[[
-                    "material", "brand", "color",
-                    "initial_grams", "remaining_grams",
-                    "purchase_cost", "purchase_date"
-                ]]
-                st.dataframe(
-                    df,
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-            st.subheader("Histórico de movimentações")
-
-            movements = get_data("filament_movements")
-
-            if movements:
-                st.dataframe(
-                    pd.DataFrame(movements),
-                    use_container_width=True,
-                    hide_index=True
-                )
-
+import streamlit as st
+import pandas as pd
+from supabase import create_client
+from urllib.parse import quote
+from datetime import date
+from decimal import Decimal
+from uuid import uuid4
 
 # ==========================================
-# EXECUÇÃO
+# CONFIGURAÇÃO
 # ==========================================
 
-st.sidebar.caption("CUBIA | Laboratório 3D e soluções inteligentes")
+st.set_page_config(
+    page_title="CUBIA | Gestão",
+    page_icon="🦁",
+    layout="wide"
+)
 
-if st.session_state.access_token:
-    try:
-        admin_panel()
-    except Exception as e:
-        st.session_state.access_token = None
-        st.session_state.refresh_token = None
-        st.error(f"A sessão administrativa expirou ou houve falha de acesso: {e}")
-        admin_login()
-else:
-    public_store()
+supabase = create_client(
+    st.secrets["SUPABASE_URL"],
+    st.secrets["SUPABASE_KEY"]
+)
 
-    with st.sidebar:
-        st.divider()
-        if st.button("Área administrativa"):
-            st.session_state.show_login = True
+WHATSAPP = st.secrets["WHATSAPP_NUMBER"]
 
-    if st.session_state.get("show_login", False):
-        admin_login()
+if "cart" not in st.session_state:
+    st.session_state.cart = {}
+
+if "access_token" not in st.session_state:
+    st.session_state.access_token = None
+
+if "refresh_token" not in st.session_state:
+    st.session_state.refresh_token = None
+
+# ==========================================
+# FUNÇÕES
+# ==========================================
+
+def money(value):
+    return f"R$ {float(value or 0):,.2f}".replace(
+        ",", "X"
+    ).replace(".", ",").replace("X", ".")
+
+
+def get_data(table, filters=None):
+    query = supabase.table(table).select("*")
+    if filters:
+        for column, value in filters.items():
+            query = query.eq(column, value)
+    return query.execute().data or []
+
+
+def save_data(table, data):
+    return supabase.table(table).insert(data).execute()
+
+
+def optional_money(value):
+    return "Não informado" if value is None else money(value)
+
+
+def payment_label(sale):
+    received = sale.get("received_amount")
+    total = sale.get("total_amount")
+    if received is None:
+        return "Não informado"
+    received = Decimal(str(received))
+    total = Decimal(str(total or 0))
+    if received == 0:
+        return "Pendente"
+    if received < total:
+        return "Parcial"
+    return "Pago"
+
+
+def upload_product_image(uploaded_file):
+    """Envia a imagem para o bucket público product-images e retorna sua URL."""
+    if uploaded_file is None:
+        return None
+
+    allowed_types = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp"
+    }
+    if uploaded_file.type not in allowed_types:
+        raise ValueError("Formato inválido. Use JPG, PNG ou WEBP.")
+
+    extension = allowed_types[uploaded_file.type]
+    file_path = f"products/{uuid4().hex}.{extension}"
+
+    supabase.storage.from_("product-images").upload(
+        file_path,
+        uploaded_file.getvalue(),
+        file_options={
+            "content-type": uploaded_file.type,
+            "cache-control": "3600"
+        }
+    )
+
+    return supabase.storage.from_("product-images").get_public_url(file_path)
+
+
+def admin_login():
+    st.title("🦁 CUBIA | Administração")
+    st.caption("Acesso exclusivo")
+
+    with st.form("login"):
+        email = st.text_input("E-mail")
+        password = st.text_input(
+            "Senha", type="password"
+        )
+        submitted = st.form_submit_button(
+            "Entrar", use_container_width=True
+        )
+
+    if submitted:
+        try:
+            result = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+
+            st.session_state.access_token = (
+                result.session.access_token
+            )
+            st.session_state.refresh_token = (
+                result.session.refresh_token
+            )
