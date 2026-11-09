@@ -185,15 +185,30 @@ def public_store():
 
     st.markdown("""
         <style>
+        /* Grade de produtos: duas colunas sem ultrapassar a tela */
         div[class*="st-key-catalog_grid"] [data-testid="stHorizontalBlock"] {
-            flex-wrap: nowrap !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             gap: 10px !important;
+            width: 100% !important;
         }
 
         div[class*="st-key-catalog_grid"] [data-testid="column"] {
+            width: 100% !important;
             min-width: 0 !important;
-            width: 50% !important;
-            flex: 0 0 50% !important;
+            max-width: 100% !important;
+            flex: none !important;
+        }
+
+        /* Impede rolagem horizontal na página */
+        html, body, [data-testid="stAppViewContainer"] {
+            overflow-x: hidden !important;
+        }
+
+        /* Imagens respeitam o espaço de cada produto */
+        div[class*="st-key-catalog_grid"] img {
+            max-width: 100% !important;
+            height: auto !important;
         }
         </style>
     """, unsafe_allow_html=True)
