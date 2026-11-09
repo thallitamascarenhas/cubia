@@ -141,6 +141,7 @@ def upload_product_image(uploaded_file):
 
 
 def admin_login():
+    st.image("assets/logo_cubia.png", width=300)
     st.title("🦁 CUBIA | Administração")
     st.caption("Acesso exclusivo")
 
@@ -322,8 +323,9 @@ def admin_panel():
         st.session_state.refresh_token
     )
 
-    with st.sidebar:
-        st.title("🦁 CUBIA")
+with st.sidebar:
+    st.image("assets/logo_cubia.png", width=180)
+    st.title("🦁 CUBIA")
         st.caption("Painel administrativo")
 
         menu = st.radio(
