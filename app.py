@@ -176,6 +176,7 @@ if st.session_state.get("_cubia_flash_success"):
 # ==========================================
 
 def public_store():
+    st.image("assets/logo_cubia.png", width=300)
     st.title("🦁 CUBIA")
     st.subheader("Ideias que ganham forma.")
     st.write(
