@@ -326,20 +326,20 @@ def admin_panel():
 with st.sidebar:
     st.image("assets/logo_cubia.png", width=180)
     st.title("🦁 CUBIA")
-        st.caption("Painel administrativo")
+    st.caption("Painel administrativo")
 
-        menu = st.radio(
-            "Menu",
-            [
-                "Dashboard",
-                "Produtos",
-                "Clientes",
-                "Despesas",
-                "Vendas",
-                "Estoque de produtos",
-                "Filamentos"
-            ]
-        )
+    menu = st.radio(
+        "Menu",
+        [
+            "Dashboard",
+            "Produtos",
+            "Clientes",
+            "Despesas",
+            "Vendas",
+            "Estoque de produtos",
+            "Filamentos"
+        ]
+    )
 
         st.divider()
         if st.button(
