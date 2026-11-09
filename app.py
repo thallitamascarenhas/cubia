@@ -326,7 +326,6 @@ def admin_panel():
 with st.sidebar:
     st.image("assets/logo_cubia.png", width=180)
     st.title("🦁 CUBIA")
-    
         st.caption("Painel administrativo")
 
         menu = st.radio(
