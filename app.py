@@ -106,23 +106,23 @@ def admin_login():
 
     with st.form("login"):
         email = st.text_input("E-mail")
-        password = st.text_input(
-            "Senha", type="password"
-        )
-        submitted = st.form_submit_button(
-            "Entrar", use_container_width=True
-        )
+        password = st.text_input("Senha", type="password")
+        submitted = st.form_submit_button("Entrar", use_container_width=True)
 
     if submitted:
         try:
-            result = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
+            result = supabase.auth.sign_in_with_password(
+                {"email": email, "password": password}
+            )
+            st.session_state.access_token = result.session.access_token
+            st.session_state.refresh_token = result.session.refresh_token
+            st.rerun()
+        except Exception as error:
+            st.error(f"E-mail ou senha inválidos. Detalhe: {error}")
 
-            st.session_state.access_token = (
-                result.session.access_token
-            )
-            st.session_state.refresh_token = (
-                result.session.refresh_token
-            )
+
+# ==========================================
+# LOJA PÚBLICA
+# ==========================================
+
+def public_store():
