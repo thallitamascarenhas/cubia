@@ -316,6 +316,7 @@ def public_store():
 # ADMINISTRAÇÃO
 # ==========================================
 
+
 def admin_panel():
 
     supabase.auth.set_session(
@@ -323,25 +324,26 @@ def admin_panel():
         st.session_state.refresh_token
     )
 
-with st.sidebar:
-    st.image("assets/logo_cubia.png", width=180)
-    st.title("🦁 CUBIA")
-    st.caption("Painel administrativo")
+    with st.sidebar:
+        st.image("assets/logo_cubia.png", width=180)
+        st.title("🦁 CUBIA")
+        st.caption("Painel administrativo")
 
-    menu = st.radio(
-        "Menu",
-        [
-            "Dashboard",
-            "Produtos",
-            "Clientes",
-            "Despesas",
-            "Vendas",
-            "Estoque de produtos",
-            "Filamentos"
-        ]
-    )
+        menu = st.radio(
+            "Menu",
+            [
+                "Dashboard",
+                "Produtos",
+                "Clientes",
+                "Despesas",
+                "Vendas",
+                "Estoque de produtos",
+                "Filamentos"
+            ]
+        )
 
         st.divider()
+
         if st.button(
             "← Voltar à loja pública",
             use_container_width=True,
@@ -350,13 +352,16 @@ with st.sidebar:
             try:
                 supabase.auth.sign_out()
             except Exception:
-                # Mesmo se o encerramento remoto da sessão falhar,
-                # removemos os tokens locais e voltamos à vitrine.
                 pass
+
             st.session_state.access_token = None
             st.session_state.refresh_token = None
             st.session_state.show_login = False
             st.rerun()
+
+    # ======================================
+    # DASHBOARD
+    # ======================================
 
     # ======================================
     # DASHBOARD
