@@ -206,10 +206,15 @@ def public_store():
         }
 
         /* Imagens respeitam o espaço de cada produto */
+        /* Padronização das fotos do catálogo */
         div[class*="st-key-catalog_grid"] img {
-            max-width: 100% !important;
-            height: auto !important;
-        }
+    width: 100% !important;
+    height: clamp(150px, 22vw, 220px) !important;
+    object-fit: contain !important;
+    background-color: #F7F7F7;
+    border-radius: 8px;
+    display: block;
+}
         </style>
     """, unsafe_allow_html=True)
 
