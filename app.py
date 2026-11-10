@@ -215,10 +215,10 @@ def public_store():
 
     
     page = st.radio(
-        "Navegação",
-        ["Produtos", "🛒 Meu carrinho 🛒 ", "Sobre a Cubia"],
-        horizontal=True
-    )
+    "Navegação",
+    ["Produtos", "🛒 Meu carrinho", "Sobre a CUBIA"],
+    horizontal=True
+)
 
     # ======================================
     # CATÁLOGO DE PRODUTOS
@@ -382,70 +382,120 @@ def public_store():
     # ======================================
     # CARRINHO
     # ======================================
-    elif page == "Meu carrinho":
+    
+    # ======================================
+    # CARRINHO
+    # ======================================
+    elif page == "🛒 Meu carrinho":
+
+        st.title("🛒 Meu carrinho")
+        st.caption("Confira seus produtos antes de finalizar o pedido.")
 
         cart = st.session_state.cart
 
         if not cart:
             st.info("Seu carrinho está vazio.")
-            return
 
-        total = 0
+            if st.button("Ver produtos", use_container_width=True):
+                st.rerun()
 
-        for product_id, item in list(cart.items()):
-            c1, c2, c3 = st.columns([3, 2, 1])
+        else:
+            total = 0
 
-            with c1:
-                st.write(item["name"])
+            for product_id, item in list(cart.items()):
 
-            with c2:
-                qty = st.number_input(
-                    "Quantidade",
-                    min_value=0,
-                    value=item["quantity"],
-                    key=f"qty_{product_id}"
-                )
-                item["quantity"] = qty
+                with st.container(border=True):
 
-            with c3:
-                subtotal = qty * item["price"]
-                st.write(money(subtotal))
-                total += subtotal
+                    col1, col2, col3 = st.columns([3, 2, 1])
 
-        st.markdown(f"## Total: {money(total)}")
+                    with col1:
+                        st.markdown(f"**{item['name']}**")
+                        st.caption(
+                            f"Valor unitário: {money(item['price'])}"
+                        )
 
-        if st.button("Limpar carrinho"):
-            st.session_state.cart = {}
-            st.rerun()
+                    with col2:
+                        qty = st.number_input(
+                            "Quantidade",
+                            min_value=1,
+                            value=int(item["quantity"]),
+                            step=1,
+                            key=f"cart_qty_{product_id}"
+                        )
 
-        if st.button(
-            "Finalizar pelo WhatsApp",
-            type="primary",
-            use_container_width=True
-        ):
+                        item["quantity"] = qty
+
+                    with col3:
+                        subtotal = qty * item["price"]
+                        st.markdown("**Subtotal**")
+                        st.write(money(subtotal))
+
+                        if st.button(
+                            "🗑️ Excluir",
+                            key=f"remove_cart_{product_id}",
+                            use_container_width=True
+                        ):
+                            del st.session_state.cart[product_id]
+                            st.rerun()
+
+                    total += subtotal
+
+            st.divider()
+
+            st.markdown(f"## Total do pedido: {money(total)}")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button(
+                    "Continuar comprando",
+                    use_container_width=True
+                ):
+                    st.session_state.selected_product_id = None
+                    st.rerun()
+
+            with col2:
+                if st.button(
+                    "Limpar carrinho",
+                    use_container_width=True
+                ):
+                    st.session_state.cart = {}
+                    st.rerun()
+
+            st.divider()
+
+            st.markdown("### Finalizar encomenda")
+
+            st.write(
+                "Ao continuar, você será direcionado ao WhatsApp "
+                "da CUBIA com a lista dos produtos e quantidades."
+            )
+
             message = "Olá! Gostaria de fazer um pedido na CUBIA:\n\n"
 
             for item in cart.values():
-                if item["quantity"] > 0:
-                    message += (
-                        f"- {item['name']} | "
-                        f"{item['quantity']} unidade(s) | "
-                        f"{money(item['price'] * item['quantity'])}\n"
-                    )
+                message += (
+                    f"• {item['name']}\n"
+                    f"  Quantidade: {item['quantity']}\n"
+                    f"  Valor unitário: {money(item['price'])}\n"
+                    f"  Subtotal: {money(item['price'] * item['quantity'])}\n\n"
+                )
 
-            message += f"\nTotal: {money(total)}"
-            message += "\n\nGostaria de confirmar meu pedido!"
+            message += f"TOTAL DO PEDIDO: {money(total)}"
+            message += "\n\nGostaria de confirmar minha encomenda!"
 
-            url = (
-                f"https://wa.me/{WHATSAPP}"
-                f"?text={quote(message)}"
-            )
+            url = whatsapp_url(WHATSAPP, message)
 
-            st.link_button(
-                "Abrir conversa no WhatsApp",
-                url,
-                use_container_width=True
-            )
+            if url:
+                st.link_button(
+                    "🟢 Finalizar pedido pelo WhatsApp",
+                    url,
+                    type="primary",
+                    use_container_width=True
+                )
+            else:
+                st.error("Número de WhatsApp da CUBIA não configurado.")
+
 
     # ======================================
     # SOBRE A CUBIA
